@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Neo Run: Naija</title>
 
 <style>
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html, body {
-  margin: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -20,57 +21,380 @@ html, body {
   touch-action: none;
 }
 
-canvas {
+#game {
   display: block;
   width: 100%;
   height: 100%;
+  background: #07111f;
 }
 
-#hud {
+#ui {
   position: fixed;
-  top: 12px;
-  left: 12px;
-  right: 12px;
+  top: 15px;
+  left: 15px;
+  right: 15px;
   display: flex;
   justify-content: space-between;
   color: white;
-  font-weight: 800;
-  font-size: 18px;
-  text-shadow: 0 2px 4px #000;
+  font-size: 20px;
+  font-weight: bold;
+  z-index: 5;
   pointer-events: none;
 }
 
-#help {
-  position: fixed;
-  bottom: 12px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  color: #ffffffaa;
-  font-size: 13px;
-  pointer-events: none;
-}
-
-#gameover {
+#message {
   position: fixed;
   inset: 0;
-  background: #0009;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
   color: white;
   text-align: center;
+  background: rgba(0,0,0,.45);
+  z-index: 10;
 }
 
-.card {
-  background: #10243acc;
-  border: 1px solid #ffffff33;
-  border-radius: 22px;
-  padding: 28px;
-  width: min(88%, 360px);
-  box-shadow: 0 20px 60px #0008;
+#message h1 {
+  font-size: 42px;
+  margin-bottom: 10px;
+  color: #20c76b;
+}
+
+#message p {
+  font-size: 18px;
+  margin: 6px;
 }
 
 button {
-  border: 0;
- 
+  margin-top: 20px;
+  padding: 14px 30px;
+  border: none;
+  border-radius: 12px;
+  background: #20c76b;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.hidden {
+  display: none !important;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div>🇳🇬 NEO RUN</div>
+  <div>Score: <span id="score">0</span></div>
+</div>
+
+<div id="message">
+  <h1>NEO RUN</h1>
+  <p>🇳🇬 Naija Endless Runner</p>
+  <p>Swipe left/right to move</p>
+  <p>Swipe up to jump</p>
+  <button id="startBtn">START RUN</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const scoreEl = document.getElementById("score");
+const message = document.getElementById("message");
+const startBtn = document.getElementById("startBtn");
+
+let W, H;
+let running = false;
+let score = 0;
+let speed = 7;
+let lastTime = 0;
+let spawnTimer = 0;
+
+const player = {
+  lane: 1,
+  x: 0,
+  y: 0,
+  width: 42,
+  height: 58,
+  jump: 0,
+  jumping: false
+};
+
+const obstacles = [];
+const coins = [];
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+
+  player.y = H - 145;
+  player.x = laneX(player.lane);
+}
+
+window.addEventListener("resize", resize);
+resize();
+
+function laneX(lane) {
+  const roadLeft = W * 0.12;
+  const roadWidth = W * 0.76;
+  return roadLeft + roadWidth * (lane + 0.5) / 3;
+}
+
+function drawBackground() {
+  // Sky
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "#168bd0");
+  sky.addColorStop(0.55, "#7dd6f5");
+  sky.addColorStop(1, "#f5c16c");
+
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  // Sun
+  ctx.fillStyle = "#ffd45c";
+  ctx.beginPath();
+  ctx.arc(W * 0.78, H * 0.17, 45, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Buildings
+  for (let i = 0; i < 9; i++) {
+    const bw = W / 9;
+    const bh = 80 + (i % 4) * 35;
+
+    ctx.fillStyle = i % 2 ? "#52616b" : "#394b59";
+    ctx.fillRect(i * bw, H - 250 - bh, bw - 5, bh);
+
+    ctx.fillStyle = "#ffd966";
+
+    for (let r = 0; r < 3; r++) {
+      ctx.fillRect(
+        i * bw + 12,
+        H - 230 - bh + r * 28,
+        12,
+        12
+      );
+    }
+  }
+
+  // Grass
+  ctx.fillStyle = "#16823d";
+  ctx.fillRect(0, H - 190, W, 190);
+
+  // Road
+  ctx.fillStyle = "#30343b";
+  ctx.beginPath();
+  ctx.moveTo(W * 0.12, H);
+  ctx.lineTo(W * 0.25, H - 190);
+  ctx.lineTo(W * 0.75, H - 190);
+  ctx.lineTo(W * 0.88, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Road edges
+  ctx.strokeStyle = "#f4f4f4";
+  ctx.lineWidth = 5;
+
+  ctx.beginPath();
+  ctx.moveTo(W * 0.12, H);
+  ctx.lineTo(W * 0.25, H - 190);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(W * 0.88, H);
+  ctx.lineTo(W * 0.75, H - 190);
+  ctx.stroke();
+
+  // Lane markings
+  ctx.strokeStyle = "#f5d76e";
+  ctx.lineWidth = 4;
+  ctx.setLineDash([25, 25]);
+
+  ctx.beginPath();
+  ctx.moveTo(W * 0.5, H);
+  ctx.lineTo(W * 0.5, H - 190);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+}
+
+function drawPlayer() {
+  const px = player.x;
+  const py = player.y - player.jump;
+
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,.25)";
+  ctx.beginPath();
+  ctx.ellipse(px, player.y + 5, 25, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = "#20c76b";
+  ctx.fillRect(
+    px - player.width / 2,
+    py - player.height,
+    player.width,
+    player.height
+  );
+
+  // Head
+  ctx.fillStyle = "#8b552f";
+  ctx.beginPath();
+  ctx.arc(px, py - player.height - 12, 17, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hair
+  ctx.fillStyle = "#171717";
+  ctx.beginPath();
+  ctx.arc(px, py - player.height - 17, 17, Math.PI, Math.PI * 2);
+  ctx.fill();
+
+  // Shirt stripe
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(
+    px - player.width / 2,
+    py - player.height + 15,
+    player.width,
+    7
+  );
+
+  // Legs
+  ctx.fillStyle = "#17202a";
+  ctx.fillRect(px - 16, py - 2, 11, 18);
+  ctx.fillRect(px + 5, py - 2, 11, 18);
+}
+
+function spawnObstacle() {
+  const lane = Math.floor(Math.random() * 3);
+
+  obstacles.push({
+    lane,
+    x: laneX(lane),
+    y: H - 195,
+    width: 45,
+    height: 45
+  });
+}
+
+function spawnCoin() {
+  const lane = Math.floor(Math.random() * 3);
+
+  coins.push({
+    lane,
+    x: laneX(lane),
+    y: H - 200,
+    radius: 12
+  });
+}
+
+function drawObstacle(o) {
+  ctx.fillStyle = "#e53935";
+  ctx.fillRect(
+    o.x - o.width / 2,
+    o.y - o.height,
+    o.width,
+    o.height
+  );
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 18px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("STOP", o.x, o.y - 15);
+}
+
+function drawCoin(c) {
+  ctx.fillStyle = "#ffd700";
+  ctx.beginPath();
+  ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#9b7400";
+  ctx.font = "bold 12px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("₦", c.x, c.y + 5);
+}
+
+function collision(o) {
+  const px = player.x;
+  const py = player.y - player.jump;
+
+  return (
+    Math.abs(px - o.x) < 35 &&
+    py > o.y - o.height - 45 &&
+    py < o.y + 10
+  );
+}
+
+function collectCoin(c) {
+  const px = player.x;
+  const py = player.y - player.jump;
+
+  return (
+    Math.abs(px - c.x) < 35 &&
+    Math.abs(py - c.y) < 50
+  );
+}
+
+function movePlayer() {
+  const targetX = laneX(player.lane);
+  player.x += (targetX - player.x) * 0.25;
+
+  if (player.jumping) {
+    player.jump += 10;
+
+    if (player.jump >= 130) {
+      player.jumping = false;
+    }
+  } else if (player.jump > 0) {
+    player.jump -= 10;
+  }
+
+  player.y = H - 145;
+}
+
+function update(delta) {
+  if (!running) return;
+
+  spawnTimer += delta;
+
+  if (spawnTimer > 900) {
+    spawnObstacle();
+    spawnTimer = 0;
+
+    if (Math.random() > 0.35) {
+      spawnCoin();
+    }
+
+    speed += 0.03;
+  }
+
+  obstacles.forEach(o => {
+    o.y += speed;
+  });
+
+  coins.forEach(c => {
+    c.y += speed;
+  });
+
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    if (collision(obstacles[i])) {
+      gameOver();
+      return;
+    }
+
+    if (obstacles[i].y > H + 100) {
+      obstacles.splice(i, 1);
+      score += 1;
+    }
+  }
+
+  for (let i = coins.length - 1; i >= 0; i--) {
+    if (collectCoin(coins[i])) {
+      coins.splice(i, 1);
+      score += 10;
+    } else if (coins[i].y > H + 100) {
+      coins
