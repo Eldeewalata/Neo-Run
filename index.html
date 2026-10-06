@@ -2,104 +2,112 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
 <title>Neo Run: Naija</title>
 
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+}
+
 html,body{
   width:100%;
   height:100%;
   overflow:hidden;
   background:#030712;
   font-family:Arial,sans-serif;
-  touch-action:none
+  touch-action:none;
 }
+
 #game{
-  display:block;
   width:100%;
-  height:100%
+  height:100%;
+  display:block;
 }
+
 #ui{
   position:fixed;
-  top:max(14px,env(safe-area-inset-top));
-  left:14px;
-  right:14px;
+  top:15px;
+  left:15px;
+  right:15px;
   display:flex;
   justify-content:space-between;
-  align-items:center;
-  color:#fff;
   z-index:5;
+  color:white;
+  font-weight:bold;
+  font-size:16px;
   pointer-events:none;
-  font-weight:900;
-  text-shadow:0 2px 8px #000;
-  font-size:17px
 }
+
 .badge{
-  background:rgba(3,7,18,.58);
-  border:1px solid rgba(32,199,107,.55);
+  background:rgba(0,0,0,.55);
+  border:1px solid #20c76b;
   padding:9px 12px;
-  border-radius:14px;
-  backdrop-filter:blur(8px)
+  border-radius:12px;
+  box-shadow:0 0 12px rgba(32,199,107,.35);
 }
+
 #message{
   position:fixed;
   inset:0;
+  z-index:10;
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
-  flex-direction:column;
-  color:#fff;
   text-align:center;
-  background:radial-gradient(circle,rgba(8,25,42,.42),rgba(0,0,0,.82));
-  z-index:10;
-  padding:25px
+  color:white;
+  background:rgba(0,0,0,.72);
 }
+
 #message h1{
-  font-size:clamp(42px,13vw,76px);
-  letter-spacing:4px;
+  font-size:clamp(45px,13vw,75px);
   color:#20c76b;
-  text-shadow:0 0 8px #20c76b,0 0 28px #087b42;
-  margin-bottom:5px
+  letter-spacing:4px;
+  text-shadow:
+    0 0 8px #20c76b,
+    0 0 25px #20c76b;
 }
-#message .sub{
-  font-size:18px;
-  color:#d9fff0;
-  margin:3px 0 16px
-}
+
 #message p{
+  margin:5px;
+  color:#d7e7e0;
   font-size:15px;
-  color:#cbd5e1;
-  margin:4px
 }
+
+#message .subtitle{
+  color:#ffd83d;
+  font-size:18px;
+  margin:5px 0 15px;
+}
+
 button{
   margin-top:20px;
-  padding:15px 34px;
-  border:1px solid rgba(255,255,255,.35);
-  border-radius:15px;
-  background:linear-gradient(135deg,#20c76b,#0b8f4a);
-  color:#fff;
+  padding:15px 32px;
+  border:0;
+  border-radius:14px;
+  background:linear-gradient(135deg,#20c76b,#087b42);
+  color:white;
   font-size:18px;
-  font-weight:900;
-  box-shadow:0 0 22px rgba(32,199,107,.4);
-  cursor:pointer
+  font-weight:bold;
+  box-shadow:0 0 25px rgba(32,199,107,.5);
 }
-button:active{
-  transform:scale(.96)
-}
+
 .hidden{
-  display:none!important
+  display:none!important;
 }
+
 #hint{
   position:fixed;
-  bottom:18px;
+  bottom:15px;
   left:50%;
   transform:translateX(-50%);
+  color:rgba(255,255,255,.65);
+  font-size:11px;
   z-index:4;
-  color:rgba(255,255,255,.72);
-  font-size:12px;
-  pointer-events:none;
-  white-space:nowrap
+  white-space:nowrap;
 }
 </style>
 </head>
@@ -110,6 +118,7 @@ button:active{
 
 <div id="ui">
   <div class="badge">🇳🇬 NEO RUN</div>
+
   <div class="badge">
     ₦ <span id="coins">0</span>
     &nbsp; SCORE <span id="score">0</span>
@@ -121,213 +130,233 @@ button:active{
 </div>
 
 <div id="message">
+
   <h1>NEO RUN</h1>
-  <div class="sub">🇳🇬 NAIJA DIGITAL RUNNER</div>
-  <p>Swipe left / right to change lanes</p>
+
+  <div class="subtitle">
+    🇳🇬 NAIJA DIGITAL RUNNER
+  </div>
+
+  <p>Swipe left / right to move</p>
   <p>Swipe up to jump</p>
-  <button id="startBtn">START RUN</button>
+
+  <button id="startBtn">
+    START RUN
+  </button>
+
 </div>
 
 <script>
 
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-const scoreEl=document.getElementById("score");
-const coinEl=document.getElementById("coins");
-const message=document.getElementById("message");
-const startBtn=document.getElementById("startBtn");
+const scoreText = document.getElementById("score");
+const coinText = document.getElementById("coins");
+const message = document.getElementById("message");
+const startBtn = document.getElementById("startBtn");
 
-let W=0;
-let H=0;
-let dpr=1;
+let W = 0;
+let H = 0;
+let running = false;
 
-let running=false;
-let score=0;
-let coinScore=0;
-let speed=5.8;
-let last=0;
-let spawn=0;
-let distance=0;
-let shake=0;
+let score = 0;
+let coinsCollected = 0;
 
-const obstacles=[];
-const coins=[];
-const particles=[];
-const stars=[];
-const buildings=[];
+let speed = 6;
+let spawnTimer = 0;
+let lastTime = 0;
+let roadOffset = 0;
 
-const player={
+const obstacles = [];
+const coins = [];
+const particles = [];
+const stars = [];
+
+const player = {
   lane:1,
   x:0,
   y:0,
-  width:42,
-  height:66,
   jump:0,
   jumping:false,
-  run:0
+  animation:0
 };
+
+
+/* =========================
+   RESIZE
+========================= */
 
 function resize(){
 
-  W=innerWidth;
-  H=innerHeight;
+  W = window.innerWidth;
+  H = window.innerHeight;
 
-  dpr=Math.min(devicePixelRatio||1,2);
+  canvas.width = W;
+  canvas.height = H;
 
-  canvas.width=W*dpr;
-  canvas.height=H*dpr;
+  player.y = H - 145;
+  player.x = laneX(player.lane);
 
-  canvas.style.width=W+"px";
-  canvas.style.height=H+"px";
+  stars.length = 0;
 
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-
-  player.y=H-145;
-  player.x=laneX(player.lane);
-
-  stars.length=0;
-  buildings.length=0;
-
-  for(let i=0;i<70;i++){
+  for(let i=0;i<60;i++){
 
     stars.push({
       x:Math.random()*W,
       y:Math.random()*H*.55,
-      r:Math.random()*1.8+.3,
-      a:Math.random()
-    });
-
-  }
-
-  for(let i=0;i<14;i++){
-
-    buildings.push({
-      x:i*(W/14),
-      w:W/14-3,
-      h:60+Math.random()*120
+      size:Math.random()*2+0.5
     });
 
   }
 
 }
 
-addEventListener("resize",resize);
+window.addEventListener("resize",resize);
 
 resize();
 
+
+/* =========================
+   ROAD LANES
+========================= */
+
 function laneX(lane){
 
-  const left=W*.12;
-  const width=W*.76;
+  const left = W * .12;
+  const width = W * .76;
 
-  return left+width*(lane+.5)/3;
-
-}
-
-function rnd(a,b){
-
-  return Math.random()*(b-a)+a;
+  return left + width * (lane + .5) / 3;
 
 }
 
-function drawBackground(t){
 
-  const sky=ctx.createLinearGradient(0,0,0,H);
+/* =========================
+   BACKGROUND
+========================= */
 
-  sky.addColorStop(0,"#041b36");
-  sky.addColorStop(.48,"#0b5b80");
-  sky.addColorStop(1,"#e69a52");
+function drawBackground(time){
 
-  ctx.fillStyle=sky;
+  const sky = ctx.createLinearGradient(
+    0,0,0,H
+  );
+
+  sky.addColorStop(0,"#04182d");
+  sky.addColorStop(.5,"#08779d");
+  sky.addColorStop(1,"#e29a55");
+
+  ctx.fillStyle = sky;
   ctx.fillRect(0,0,W,H);
+
 
   /* STARS */
 
-  for(const s of stars){
+  for(const star of stars){
 
-    ctx.globalAlpha=.25+
-      .55*Math.abs(Math.sin(t*.001+s.a*5));
+    ctx.globalAlpha =
+      .4 + Math.sin(time*.002 + star.x)*.3;
 
-    ctx.fillStyle="#fff";
+    ctx.fillStyle = "#ffffff";
 
     ctx.beginPath();
-    ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+
+    ctx.arc(
+      star.x,
+      star.y,
+      star.size,
+      0,
+      Math.PI*2
+    );
+
     ctx.fill();
 
   }
 
-  ctx.globalAlpha=1;
+  ctx.globalAlpha = 1;
+
 
   /* SUN */
 
-  const glow=ctx.createRadialGradient(
-    W*.78,H*.17,5,
-    W*.78,H*.17,90
+  const sun = ctx.createRadialGradient(
+    W*.78,
+    H*.18,
+    5,
+    W*.78,
+    H*.18,
+    90
   );
 
-  glow.addColorStop(0,"rgba(255,221,108,.9)");
-  glow.addColorStop(1,"rgba(255,180,60,0)");
+  sun.addColorStop(
+    0,
+    "rgba(255,220,90,.95)"
+  );
 
-  ctx.fillStyle=glow;
+  sun.addColorStop(
+    1,
+    "rgba(255,170,50,0)"
+  );
+
+  ctx.fillStyle = sun;
 
   ctx.beginPath();
-  ctx.arc(W*.78,H*.17,90,0,Math.PI*2);
+
+  ctx.arc(
+    W*.78,
+    H*.18,
+    90,
+    0,
+    Math.PI*2
+  );
+
   ctx.fill();
 
-  /* CITY */
 
-  buildings.forEach((b,i)=>{
+  /* BUILDINGS */
 
-    const y=H-250-b.h;
+  const buildingWidth = W/10;
 
-    ctx.fillStyle=i%2?"#12293a":"#18384a";
+  for(let i=0;i<10;i++){
+
+    const height =
+      70 + (i%4)*35;
+
+    const y =
+      H - 250 - height;
+
+    ctx.fillStyle =
+      i%2
+      ? "#173247"
+      : "#10283a";
 
     ctx.fillRect(
-      b.x,
+      i*buildingWidth,
       y,
-      b.w,
-      b.h
+      buildingWidth-3,
+      height
     );
 
-    for(let r=0;r<4;r++){
 
-      for(let c=0;c<2;c++){
+    /* WINDOWS */
 
-        ctx.fillStyle=
-          (r+c+i)%3===0
-          ?" #ffd966"
-          :"#24d9a1";
+    for(let row=0;row<3;row++){
 
-        ctx.globalAlpha=.45;
+      ctx.fillStyle =
+        row%2
+        ? "#20c76b"
+        : "#ffd85a";
 
-        ctx.fillRect(
-          b.x+7+c*18,
-          y+13+r*23,
-          8,
-          10
-        );
+      ctx.globalAlpha=.5;
 
-      }
+      ctx.fillRect(
+        i*buildingWidth+10,
+        y+15+row*27,
+        9,
+        12
+      );
 
-    }
-
-    ctx.globalAlpha=1;
-
-  });
-
-  /* DIGITAL CITY LINES */
-
-  ctx.strokeStyle="rgba(32,199,107,.2)";
-  ctx.lineWidth=1;
-
-  for(let y=H-245;y<H-170;y+=12){
-
-    ctx.beginPath();
-    ctx.moveTo(0,y);
-    ctx.lineTo(W,y);
-    ctx.stroke();
-
-  }
-
-  /* GR
+      ctx.fillRect(
+        i*buildingWidth+27,
+        y+15+row*27,
+        9,
+        12
+     
